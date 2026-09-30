@@ -39,9 +39,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Full history and tags: pack.ps1 takes the version from the latest v*.*.* tag.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      # e.g. com.eevconsulting.ai-usage-0.4.0-ci.12-797ff73.streamDeckPlugin, manifest version 0.4.0.12
+      # e.g. after v0.1.1: com.eevconsulting.ai-usage-0.1.1-ci.12-797ff73.streamDeckPlugin, manifest version 0.1.1.12
       - name: Build .streamDeckPlugin
         shell: pwsh
         env:

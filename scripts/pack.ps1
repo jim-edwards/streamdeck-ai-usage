@@ -1,7 +1,8 @@
 # Builds dist/com.eevconsulting.ai-usage-<version>.streamDeckPlugin (a zip with the .sdPlugin folder at its root).
 # Double-clicking the file installs it into Stream Deck. Used locally and by the release workflow.
 #   -Version 1.2.3        release version (a leading "v" is allowed, so a tag can be passed straight in);
-#                         defaults to the version in package.json
+#                         defaults to the latest v*.*.* git tag, or 0.0.0 if there is none.
+#                         Versions only ever come from tags; nothing in the source is bumped by hand.
 #   -Build 42             fourth manifest version part; 0 for releases, the CI run number otherwise
 #   -Suffix ci.42-abc1234 appended to the file name to tell non-release builds apart
 param(
@@ -11,7 +12,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-if (-not $Version) { $Version = (Get-Content (Join-Path (Split-Path $PSScriptRoot -Parent) 'package.json') -Raw | ConvertFrom-Json).version }
+if (-not $Version) {
+  $Version = git -C $PSScriptRoot describe --tags --match 'v*.*.*' --abbrev=0 2>$null
+  if ($LASTEXITCODE -or -not $Version) { $Version = '0.0.0' }
+}
 
 if ($Version -notmatch '^v?(\d+)\.(\d+)\.(\d+)$') { throw "Version must look like 1.2.3 or v1.2.3, got '$Version'" }
 $semver = "$($Matches[1]).$($Matches[2]).$($Matches[3])"

@@ -96,11 +96,11 @@ Uses Node's built-in test runner, so there's nothing to install. The tests cover
 ### Building a package
 
 ```powershell
-pwsh -File scripts/pack.ps1 -Suffix dev      # dist/com.eevconsulting.ai-usage-<package.json version>-dev.streamDeckPlugin
+pwsh -File scripts/pack.ps1 -Suffix dev      # dist/com.eevconsulting.ai-usage-<latest tag>-dev.streamDeckPlugin
 pwsh -File scripts/pack.ps1 -Version 1.2.3   # dist/com.eevconsulting.ai-usage-1.2.3.streamDeckPlugin, manifest 1.2.3.0
 ```
 
-The version defaults to `package.json`'s. `-Build <n>` sets the manifest's fourth version part, and `-Suffix` tags the file name for non-release builds. Packages always ship with the Node debugger disabled and include `LICENSE`.
+The version defaults to the latest `v*.*.*` git tag (0.0.0 if there are none). `-Build <n>` sets the manifest's fourth version part, and `-Suffix` tags the file name for non-release builds. Packages always ship with the Node debugger disabled and include `LICENSE`.
 
 ### Marketplace listing
 
@@ -108,7 +108,7 @@ The version defaults to `package.json`'s. `-Build <n>` sets the manifest's fourt
 
 ### CI and releases (GitHub Actions)
 
-- **CI** (`.github/workflows/ci.yml`): on every push to `main` and every pull request, runs the tests on Windows and Linux with Node 24 (the runtime Stream Deck uses for the plugin), then builds the package and attaches it to the run. The download is the `.streamDeckPlugin` itself (not zipped), named like `com.eevconsulting.ai-usage-0.4.0-ci.12-797ff73.streamDeckPlugin` (version, CI run number, commit), with manifest version `0.4.0.12`.
+- **CI** (`.github/workflows/ci.yml`): on every push to `main` and every pull request, runs the tests on Windows and Linux with Node 24 (the runtime Stream Deck uses for the plugin), then builds the package and attaches it to the run. The download is the `.streamDeckPlugin` itself (not zipped), named like `com.eevconsulting.ai-usage-0.1.1-ci.12-797ff73.streamDeckPlugin` (latest tag, CI run number, commit), with manifest version `0.1.1.12`.
 - **CodeQL** (`.github/workflows/codeql.yml`): code scanning of the JavaScript and of the workflow files on every pull request, every push to `main`, and weekly. `main` only accepts changes through pull requests that have code scanning results.
 - **Dependabot** (`.github/dependabot.yml`): the workflows pin each action to an exact commit; Dependabot opens a weekly pull request when a new version is out.
 - **Release** (`.github/workflows/release.yml`): pushing a version tag runs the tests, builds the package with that version, and publishes a GitHub Release with the `.streamDeckPlugin` attached and generated release notes.
@@ -118,7 +118,7 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-Tags must look like `v1.2.3`. Releases take their version from the tag. Between releases, keep `package.json`'s `version` and the first three parts of `manifest.json`'s `Version` set to the upcoming version (a test checks they match); CI builds use it.
+Tags must look like `v1.2.3`. Versions come only from tags, so there's nothing to edit when you release: the manifest in the source stays at `0.0.0.0`, `package.json` has no version, and the build stamps the tag's version into the package. CI builds between releases are named after the latest tag, e.g. `0.1.1-ci.12-abc1234` for CI run 12 after `v0.1.1`.
 
 ## Project layout
 
