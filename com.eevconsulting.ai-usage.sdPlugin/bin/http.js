@@ -11,9 +11,32 @@ class UsageError extends Error {
   }
 }
 
-// Failed responses go to logs/errors.log (URL, status, body; never request headers) so server reasons can be read later.
-function logFailure(url, res, body) {
-  const line = `${new Date().toISOString()} ${res.status} GET ${url}\n  ${body.slice(0, 600).replace(/\s+/g, " ")}\n`;
+const API_ERRORS = [
+  "invalid_request_error",
+  "authentication_error",
+  "permission_error",
+  "not_found_error",
+  "request_too_large",
+  "rate_limit_error",
+  "api_error",
+  "overloaded_error",
+];
+
+// The response body is untrusted, so only fixed labels chosen here ever reach the log file.
+function describeBody(body) {
+  if (!body) return "empty";
+  if (body.includes("Just a moment") || body.includes("challenges.cloudflare.com")) return "cloudflare-challenge";
+  try {
+    const type = JSON.parse(body)?.error?.type;
+    return API_ERRORS.find((known) => known === type) ?? "json";
+  } catch {
+    return /^\s*</.test(body) ? "html" : "text";
+  }
+}
+
+// Failed requests go to logs/errors.log (time, status, URL, kind of reply; never headers or reply text).
+function logFailure(url, status, body) {
+  const line = `${new Date().toISOString()} ${status} GET ${url} reply=${describeBody(body)}\n`;
   let fd;
   try {
     fs.mkdirSync(path.dirname(LOG), { recursive: true });
@@ -36,7 +59,7 @@ function logFailure(url, res, body) {
 async function getJson(url, headers) {
   const res = await fetch(url, { headers: { Accept: "application/json", ...headers }, signal: AbortSignal.timeout(15000) });
   if (!res.ok) {
-    logFailure(url, res, await res.text().catch(() => ""));
+    logFailure(url, res.status, await res.text().catch(() => ""));
     if (res.status === 401 || res.status === 403) throw new UsageError("AUTH", res.status);
     if (res.status === 429) throw new UsageError("RATE", 429);
     throw new UsageError("HTTP", res.status);
@@ -44,4 +67,4 @@ async function getJson(url, headers) {
   return res.json();
 }
 
-module.exports = { UsageError, getJson };
+module.exports = { UsageError, getJson, describeBody };

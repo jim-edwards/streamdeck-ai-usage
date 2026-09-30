@@ -60,7 +60,7 @@ The script closes Stream Deck, copies `com.eevconsulting.ai-usage.sdPlugin` into
 | `HTTP 5xx` | Server error | Press to retry |
 | `OFFLINE` | Network error or timeout | Press to retry |
 
-Failed requests are written to `logs\errors.log` inside the installed plugin folder (URL, status and the server's reply; never your token).
+Failed requests are written to `logs\errors.log` inside the installed plugin folder: time, status, URL and the kind of reply (for example `cloudflare-challenge` or `rate_limit_error`). Your token and the reply's text are never written.
 
 ## How it works
 
