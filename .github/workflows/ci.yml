@@ -23,12 +23,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Node 20 is the runtime Stream Deck bundles (manifest Nodejs.Version).
-      - uses: actions/setup-node@v4
+      # Match the runtime Stream Deck runs the plugin on (manifest Nodejs.Version).
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Unit tests
         run: node --test
@@ -39,15 +39,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # e.g. com.eevconsulting.ai-usage-0.4.0-ci.12-797ff73.streamDeckPlugin, manifest version 0.4.0.12
       - name: Build .streamDeckPlugin
         shell: pwsh
-        run: ./scripts/pack.ps1 -Version 0.0.0
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: ./scripts/pack.ps1 -Build $env:RUN_NUMBER -Suffix "ci.$env:RUN_NUMBER-$($env:SHA.Substring(0, 7))"
 
-      - uses: actions/upload-artifact@v4
+      # archive: false uploads the .streamDeckPlugin itself (named after the file), not a zip around it.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: streamDeckPlugin
           path: dist/*.streamDeckPlugin
+          archive: false
           if-no-files-found: error
           retention-days: 14

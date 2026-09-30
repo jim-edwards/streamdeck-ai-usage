@@ -24,10 +24,10 @@ The billing month follows America/Los_Angeles time (what `/usage` shows), so the
 ## Requirements
 
 - Windows 10/11
-- Stream Deck software 6.4 or later (installed at `C:\Program Files\Elgato\StreamDeck`)
+- Stream Deck software 7.1 or later (installed at `C:\Program Files\Elgato\StreamDeck`)
 - Claude Code installed and signed in to your Enterprise account
 
-There's nothing to `npm install`. The plugin is plain JavaScript and runs on the Node that ships with Stream Deck.
+There's nothing to `npm install`. The plugin is plain JavaScript and runs on the Node 24 that ships with Stream Deck.
 
 ## Install
 
@@ -96,14 +96,16 @@ Uses Node's built-in test runner, so there's nothing to install. The tests cover
 ### Building a package
 
 ```powershell
-pwsh -File scripts/pack.ps1 -Version 1.2.3
+pwsh -File scripts/pack.ps1 -Suffix dev      # dist/com.eevconsulting.ai-usage-<package.json version>-dev.streamDeckPlugin
+pwsh -File scripts/pack.ps1 -Version 1.2.3   # dist/com.eevconsulting.ai-usage-1.2.3.streamDeckPlugin, manifest 1.2.3.0
 ```
 
-Writes `dist/com.eevconsulting.ai-usage-1.2.3.streamDeckPlugin`, with the manifest version set to `1.2.3.0`.
+The version defaults to `package.json`'s. `-Build <n>` sets the manifest's fourth version part, and `-Suffix` tags the file name for non-release builds. Packages always ship with the Node debugger disabled and include `LICENSE`.
 
 ### CI and releases (GitHub Actions)
 
-- **CI** (`.github/workflows/ci.yml`): on every push to `main` and every pull request, runs the tests on Windows and Linux with Node 20 (Stream Deck's runtime), then builds the package and attaches it to the run as an artifact.
+- **CI** (`.github/workflows/ci.yml`): on every push to `main` and every pull request, runs the tests on Windows and Linux with Node 24 (the runtime Stream Deck uses for the plugin), then builds the package and attaches it to the run. The download is the `.streamDeckPlugin` itself (not zipped), named like `com.eevconsulting.ai-usage-0.4.0-ci.12-797ff73.streamDeckPlugin` (version, CI run number, commit), with manifest version `0.4.0.12`.
+- **Dependabot** (`.github/dependabot.yml`): the workflows pin each action to an exact commit; Dependabot opens a weekly pull request when a new version is out.
 - **Release** (`.github/workflows/release.yml`): pushing a version tag runs the tests, builds the package with that version, and publishes a GitHub Release with the `.streamDeckPlugin` attached and generated release notes.
 
 ```powershell
@@ -111,7 +113,7 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-Tags must look like `v1.2.3`. The version in the source `manifest.json` is just a development placeholder; releases take their version from the tag.
+Tags must look like `v1.2.3`. Releases take their version from the tag. Between releases, keep `package.json`'s `version` and the first three parts of `manifest.json`'s `Version` set to the upcoming version (a test checks they match); CI builds use it.
 
 ## Project layout
 
@@ -132,12 +134,8 @@ com.eevconsulting.ai-usage.sdPlugin/
   bin/actions/claude-spend.js                Claude Spend key
   ui/pi.js, ui/pi.css                        shared settings-panel code and style
   ui/claude-spend.html                       Claude Spend settings panel
-  imgs/                                      action-list icon and default key image
+  imgs/                                      plugin icon (PNG), action-list icon and default key image
 ```
-
-## Known gaps
-
-- Icons are SVG. If they show blank in the Stream Deck action list, they need converting to PNG.
 
 ## License
 

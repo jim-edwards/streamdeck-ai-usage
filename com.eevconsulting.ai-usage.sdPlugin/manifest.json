@@ -4,13 +4,13 @@
   "Author": "James Edwards",
   "Description": "Spend and limits for AI providers on your Stream Deck.",
   "UUID": "com.eevconsulting.ai-usage",
-  "Icon": "imgs/icon",
+  "Icon": "imgs/plugin",
   "Category": "AI Usage",
   "CategoryIcon": "imgs/icon",
   "CodePath": "bin/plugin.js",
-  "Nodejs": { "Version": "20", "Debug": "enabled" },
+  "Nodejs": { "Version": "24", "Debug": "enabled" },
   "SDKVersion": 2,
-  "Software": { "MinimumVersion": "6.4" },
+  "Software": { "MinimumVersion": "7.1" },
   "OS": [{ "Platform": "windows", "MinimumVersion": "10" }],
   "Actions": [
     {
