@@ -17,7 +17,29 @@ test("required fields are present", () => {
     assert.ok(manifest[key] !== undefined, key);
   }
   assert.match(manifest.Version, /^\d+\.\d+\.\d+\.\d+$/);
-  assert.equal(manifest.Nodejs.Version, "20");
+});
+
+test("runs on Node 24, which needs Stream Deck 7.1 or later", () => {
+  assert.equal(manifest.Nodejs.Version, "24");
+  const [major, minor] = manifest.Software.MinimumVersion.split(".").map(Number);
+  assert.ok(major > 7 || (major === 7 && minor >= 1), manifest.Software.MinimumVersion);
+});
+
+test("plugin icon is PNG at 256x256 and @2x 512x512 (SVG isn't allowed for it)", () => {
+  const size = (file) => {
+    const png = fs.readFileSync(path.join(root, file));
+    assert.equal(png.subarray(1, 4).toString(), "PNG", `${file} is a PNG`);
+    return [png.readUInt32BE(16), png.readUInt32BE(20)];
+  };
+  assert.deepEqual(size(`${manifest.Icon}.png`), [256, 256]);
+  assert.deepEqual(size(`${manifest.Icon}@2x.png`), [512, 512]);
+  assert.ok(!fs.existsSync(path.join(root, `${manifest.Icon}.svg`)), "no SVG plugin icon to shadow the PNG");
+});
+
+test("package.json version matches the manifest's first three version parts", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(manifest.Version.split(".").slice(0, 3).join("."), pkg.version);
 });
 
 test("code path and images exist", () => {

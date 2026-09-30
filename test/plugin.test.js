@@ -61,12 +61,18 @@ test("unknown actions and removed keys are ignored", async (t) => {
   deck.send({ event: "willAppear", action: "com.example.other", context: "stranger", payload: { settings: {} } });
   deck.send({ event: "keyDown", action: SPEND, context: "never-appeared", payload: {} });
   deck.send({ event: "willAppear", action: SPEND, context: "key-1", payload: { settings: {} } });
+  // Let the first refresh finish, so the only thing under test is what happens after removal.
+  await deck.waitForMessage((m) => m.event === "setImage" && m.context === "key-1" && svgFrom(m).includes("NO LOGIN"));
+  const drawn = imagesFor(deck, "key-1").length;
+
+  // Messages are handled in order, so the keyDown is processed after the key is gone.
   deck.send({ event: "willDisappear", action: SPEND, context: "key-1", payload: {} });
   deck.send({ event: "keyDown", action: SPEND, context: "key-1", payload: {} });
   await new Promise((r) => setTimeout(r, 300));
+
   assert.equal(imagesFor(deck, "stranger").length, 0);
   assert.equal(imagesFor(deck, "never-appeared").length, 0);
-  assert.ok(imagesFor(deck, "key-1").length <= 1, "only the loading image before it disappeared");
+  assert.equal(imagesFor(deck, "key-1").length, drawn, "nothing drawn after the key disappeared");
 });
 
 test("exits cleanly when Stream Deck closes the connection", async (t) => {

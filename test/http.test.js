@@ -2,7 +2,7 @@ const { test, afterEach, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { getJson, UsageError } = require("../com.eevconsulting.ai-usage.sdPlugin/bin/http");
+const { getJson, UsageError, describeBody } = require("../com.eevconsulting.ai-usage.sdPlugin/bin/http");
 
 const LOG_DIR = path.join(__dirname, "..", "com.eevconsulting.ai-usage.sdPlugin", "logs");
 const LOG = path.join(LOG_DIR, "errors.log");
@@ -52,13 +52,55 @@ for (const [status, code] of [
   });
 }
 
-test("logs failures with URL, status and body, but never request headers", async () => {
+test("logs status, URL and the kind of reply, but never request headers or reply text", async () => {
   mockFetch(403, "<html><title>Just a moment...</title></html>", "text/html");
   await assert.rejects(getJson("https://example.test/logged?x=1", { Authorization: "Bearer SECRET-TOKEN" }));
   const log = fs.readFileSync(LOG, "utf8");
-  assert.match(log, /403 GET https:\/\/example\.test\/logged\?x=1/);
-  assert.match(log, /Just a moment/);
+  assert.match(log, /403 GET https:\/\/example\.test\/logged\?x=1 reply=cloudflare-challenge\n$/);
   assert.doesNotMatch(log, /SECRET-TOKEN/);
+  assert.doesNotMatch(log, /Just a moment/);
+});
+
+test("reply text from the server never reaches the log", async () => {
+  const hostile = '{"error":{"type":"evil\\n2026-01-01 200 GET forged"},"note":"INJECTED-TEXT"}';
+  mockFetch(500, hostile);
+  await assert.rejects(getJson("https://example.test/hostile", {}));
+  const log = fs.readFileSync(LOG, "utf8");
+  assert.doesNotMatch(log, /INJECTED-TEXT|forged|evil/);
+  assert.match(log, /500 GET https:\/\/example\.test\/hostile reply=json\n$/);
+});
+
+test("a cf-mitigated: challenge header marks a Cloudflare challenge whatever the body", async () => {
+  global.fetch = async () =>
+    new Response("<html><body>anything</body></html>", { status: 403, headers: { "content-type": "text/html", "cf-mitigated": "challenge" } });
+  await assert.rejects(getJson("https://example.test/challenged", {}));
+  assert.match(fs.readFileSync(LOG, "utf8"), /403 GET https:\/\/example\.test\/challenged reply=cloudflare-challenge\n$/);
+});
+
+test("describeBody only returns fixed labels", () => {
+  assert.equal(describeBody(""), "empty");
+  assert.equal(describeBody("", "challenge"), "cloudflare-challenge");
+  assert.equal(describeBody("<html>", "something-else"), "html");
+  assert.equal(describeBody("<html><title>Just a moment...</title>"), "cloudflare-challenge");
+  // A hostname in the body is not evidence of a challenge.
+  assert.equal(describeBody('<script src="https://challenges.cloudflare.com.evil.example/x.js">'), "html");
+  assert.equal(describeBody("see https://evil.example/?challenges.cloudflare.com"), "text");
+  assert.equal(describeBody('{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}'), "rate_limit_error");
+  assert.equal(describeBody('{"error":{"type":"authentication_error"}}'), "authentication_error");
+  assert.equal(describeBody('{"error":{"type":"something_new"}}'), "json");
+  assert.equal(describeBody('{"ok":false}'), "json");
+  assert.equal(describeBody("  <!DOCTYPE html><p>oops</p>"), "html");
+  assert.equal(describeBody("Service Unavailable"), "text");
+});
+
+test("the error log is reset once it passes 100 KB", async () => {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+  fs.writeFileSync(LOG, "x".repeat(100_001));
+  mockFetch(500, "after-reset", "text/plain");
+  await assert.rejects(getJson("https://example.test/big", {}));
+  const log = fs.readFileSync(LOG, "utf8");
+  assert.ok(log.length < 1000, `log was ${log.length} bytes`);
+  assert.match(log, /500 GET https:\/\/example\.test\/big/);
 });
 
 test("network errors propagate unchanged", async () => {

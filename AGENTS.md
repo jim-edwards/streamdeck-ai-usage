@@ -16,13 +16,13 @@ Show **exact** numbers only. No estimates, no data reconstructed from polling sn
 
 ### Zero dependencies
 
-The plugin is **zero-dependency CommonJS** on Stream Deck's bundled Node 20: no npm packages, no TypeScript, no `@elgato/streamdeck`, no build step. Some development environments block `npm install`, and a dependency-free plugin is simpler to audit. `bin/socket.js` is a minimal WebSocket client over `node:net` for that reason. Tests use Node's built-in `node:test`; packaging uses PowerShell and .NET's zip support rather than the Elgato CLI.
+The plugin is **zero-dependency CommonJS** on Stream Deck's bundled Node 24: no npm packages, no TypeScript, no `@elgato/streamdeck`, no build step. Some development environments block `npm install`, and a dependency-free plugin is simpler to audit. `bin/socket.js` is a minimal WebSocket client over `node:net` for that reason. Tests use Node's built-in `node:test`; packaging uses PowerShell and .NET's zip support rather than the Elgato CLI.
 
 ### Secrets and credentials
 
 - The plugin reads Claude Code's login from `~/.claude/.credentials.json`. That file holds live OAuth access/refresh tokens and may hold other tools' secrets. **Never print, log, or read it whole.** If you need to inspect it, extract only key names or the one field you need.
 - Never refresh the OAuth token from the plugin. Claude Code owns the refresh token; using it here would rotate it and break Claude Code's login. On expiry, show `EXPIRED` and let Claude Code renew it.
-- `logs/errors.log` records URL, status and response body only, never request headers. Keep it that way.
+- `logs/errors.log` records time, status, URL and a fixed label for the kind of reply (`describeBody`: `cloudflare-challenge`, a known Anthropic error type, `json`, `html`, `text`, `empty`). Never write request headers or any text from the response: the body is untrusted (CodeQL `js/http-to-file-access`). To recognise a new failure, add a label, not an excerpt. Detect from headers or exact markers (Cloudflare challenges: `cf-mitigated: challenge`, fallback `<title>Just a moment...</title>`); never substring-match hostnames or URLs (CodeQL `js/incomplete-url-substring-sanitization`). If a host ever needs checking, parse it with `new URL()` and compare `hostname` exactly.
 
 ### Don't work around protections
 
@@ -30,7 +30,7 @@ Don't try to get past Cloudflare or other bot protection (spoofed browser header
 
 ### Verifying against real services
 
-Don't probe the live endpoints ad hoc from a shell. Behaviour is verified by installing the plugin (`install.ps1`) and watching the key; server replies for failures land in `logs/errors.log` inside the installed plugin folder (`%APPDATA%\Elgato\StreamDeck\Plugins\com.eevconsulting.ai-usage.sdPlugin\logs\`).
+Don't probe the live endpoints ad hoc from a shell. Behaviour is verified by installing the plugin (`install.ps1`) and watching the key; failed requests (status and kind of reply) land in `logs/errors.log` inside the installed plugin folder (`%APPDATA%\Elgato\StreamDeck\Plugins\com.eevconsulting.ai-usage.sdPlugin\logs\`).
 
 ## Adding an action / provider
 
@@ -78,10 +78,11 @@ The plugin only relies on this part of the response (confirmed live):
 
 ## Code map
 
-- `com.eevconsulting.ai-usage.sdPlugin/manifest.json`: SDK v2, `Nodejs.Version: "20"`, Keypad actions.
+- `com.eevconsulting.ai-usage.sdPlugin/manifest.json`: SDK v2, `Nodejs.Version: "24"`, `Software.MinimumVersion: "7.1"` (the first Stream Deck to bundle Node 24), Keypad actions. `SDKVersion` 3 exists and is recommended, but Elgato's docs only describe the npm library's v3 changes, not what the manifest value changes for a direct-WebSocket plugin; stay on 2 until that's clear.
+- `imgs/plugin.png` (256×256) + `imgs/plugin@2x.png` (512×512): the plugin icon, which must be PNG. `imgs/icon.svg` (category and action-list icon) and `imgs/key.svg` (default key image) may be SVG.
 - `bin/plugin.js`: entry point (`main()` runs only when executed directly; exports `ACTIONS` for tests). Stream Deck events (`willAppear`, `didReceiveSettings`, `keyDown` = refresh now, `willDisappear`); per-key state `{ action, settings, data, error, timer }`; `draw` / `refresh` / `schedule`.
 - `bin/socket.js`: `connectSocket(port, onOpen, onText, onClose)` → `send(obj)`. `plugin.js` exits the process in `onClose`; the socket never exits by itself.
-- `bin/http.js`: `UsageError`, `getJson` (401/403 → AUTH, 429 → RATE, other non-OK → HTTP, 15 s timeout). Failures are appended to `logs/errors.log` (capped at 100 KB).
+- `bin/http.js`: `UsageError`, `getJson` (401/403 → AUTH, 429 → RATE, other non-OK → HTTP, 15 s timeout). Failures are appended to `logs/errors.log` through a single file handle (reset past 100 KB); `describeBody` classifies the reply into a fixed label.
 - `bin/ui.js`: `FONT`, `INK` colours, `money`, `tone`, `frame`, `text`, `header`, `renderMessage`, `renderLoading`.
 - `bin/providers/claude.js`: `readCredentials`, `fetchCredits`.
 - `bin/actions/claude-spend.js`: `load`, `billingMonth`, `summarize`, `render`. 5 min default and minimum.
@@ -106,13 +107,15 @@ The plugin only relies on this part of the response (confirmed live):
 
 ## Build and release
 
-- `scripts/pack.ps1 -Version 1.2.3` (PowerShell 7) stages the `.sdPlugin` folder, drops `logs/`, adds `LICENSE`, sets manifest `Version` to `1.2.3.0` and `Nodejs.Debug` to `disabled` (the source manifest keeps it `enabled` for development), and zips it into `dist/com.eevconsulting.ai-usage-1.2.3.streamDeckPlugin` (folder at the zip root, `/` separators).
-- `.github/workflows/ci.yml`: push to `main` / PRs → `node --test` on windows-latest + ubuntu-latest (Node 20), then package and upload as an artifact. `permissions: contents: read`.
-- `.github/workflows/release.yml`: tag `v*.*.*` → tests (Windows) → package with the tag version → `gh release create --generate-notes --verify-tag`. Only the release job has `contents: write`. The tag reaches scripts through `env:`, never `${{ }}` inside `run:` (avoids script injection).
-- Only first-party GitHub actions (`actions/checkout`, `actions/setup-node`, `actions/upload-artifact`) plus the preinstalled `gh` CLI. Pin any new action to a commit SHA.
-- The source manifest `Version` is a dev placeholder; releases take their version from the tag.
+- `scripts/pack.ps1 [-Version 1.2.3] [-Build n] [-Suffix label]` (PowerShell 7) stages the `.sdPlugin` folder, drops `logs/`, adds `LICENSE`, sets manifest `Version` to `<version>.<build>` and `Nodejs.Debug` to `disabled` (the source manifest keeps it `enabled` for development), and zips it into `dist/com.eevconsulting.ai-usage-<version>[-<suffix>].streamDeckPlugin` (folder at the zip root, `/` separators). `-Version` defaults to `package.json`; `-Suffix` is restricted to `[A-Za-z0-9.-]`.
+- `.github/workflows/ci.yml`: push to `main` / PRs → `node --test` on windows-latest + ubuntu-latest with Node 24 (Stream Deck's runtime), then package with `-Build <run_number> -Suffix ci.<run_number>-<sha7>` and upload with `archive: false`, so the artifact download is the `.streamDeckPlugin` itself. `permissions: contents: read`.
+- `.github/workflows/release.yml`: tag `v*.*.*` → tests (Windows, Node 24) → package with the tag version → `gh release create --generate-notes --verify-tag`. Only the release job has `contents: write`. The tag reaches scripts through `env:`, never `${{ }}` inside `run:` (avoids script injection).
+- `.github/workflows/codeql.yml`: CodeQL (`javascript-typescript` and `actions`, `build-mode: none`, `security-and-quality` queries) on PRs to `main`, pushes to `main`, and weekly. The `main` ruleset requires a pull request and waits for code scanning results, so direct pushes to `main` are rejected: work on a branch and open a PR. Keep the code free of CodeQL findings (e.g. no unused imports, no check-then-use on file paths; use one file handle).
+- Only first-party GitHub actions (`actions/checkout`, `actions/setup-node`, `actions/upload-artifact`, all v7 on the Node 24 runtime; `github/codeql-action` v4) plus the preinstalled `gh` CLI, **pinned to commit SHAs** with a `# vX.Y.Z` comment; `.github/dependabot.yml` bumps them weekly. Pin any new action the same way.
+- Versions: `package.json` `version` = first three parts of manifest `Version` = the upcoming release (the `manifest` suite enforces the match). Releases take their version from the tag.
+- CI and release test with the same Node major as the manifest's `Nodejs.Version`; change them together.
+- Reference: Elgato's [manifest](https://docs.elgato.com/streamdeck/sdk/references/manifest/) and [plugin environment](https://docs.elgato.com/streamdeck/sdk/introduction/plugin-environment/) docs (bundled Node versions per Stream Deck release; 7.1+ bundles 20.20.0 and 24.13.1).
 
 ## Open items
 
-1. Check whether the SVG manifest icons show up in the Stream Deck action list; convert to PNG if blank.
-2. Look for a server-provided reset time for usage credits to replace the America/Los_Angeles assumption.
+1. Look for a server-provided reset time for usage credits to replace the America/Los_Angeles assumption.

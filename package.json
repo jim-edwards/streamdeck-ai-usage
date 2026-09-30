@@ -5,10 +5,10 @@
   "description": "Stream Deck plugin showing AI provider spend and limits.",
   "license": "GPL-3.0-only",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "test": "node --test",
-    "pack": "pwsh -NoProfile -File scripts/pack.ps1 -Version 0.0.0"
+    "pack": "pwsh -NoProfile -File scripts/pack.ps1 -Suffix dev"
   }
 }
