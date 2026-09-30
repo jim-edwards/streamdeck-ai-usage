@@ -70,10 +70,21 @@ test("reply text from the server never reaches the log", async () => {
   assert.match(log, /500 GET https:\/\/example\.test\/hostile reply=json\n$/);
 });
 
+test("a cf-mitigated: challenge header marks a Cloudflare challenge whatever the body", async () => {
+  global.fetch = async () =>
+    new Response("<html><body>anything</body></html>", { status: 403, headers: { "content-type": "text/html", "cf-mitigated": "challenge" } });
+  await assert.rejects(getJson("https://example.test/challenged", {}));
+  assert.match(fs.readFileSync(LOG, "utf8"), /403 GET https:\/\/example\.test\/challenged reply=cloudflare-challenge\n$/);
+});
+
 test("describeBody only returns fixed labels", () => {
   assert.equal(describeBody(""), "empty");
+  assert.equal(describeBody("", "challenge"), "cloudflare-challenge");
+  assert.equal(describeBody("<html>", "something-else"), "html");
   assert.equal(describeBody("<html><title>Just a moment...</title>"), "cloudflare-challenge");
-  assert.equal(describeBody('<script src="https://challenges.cloudflare.com/x.js">'), "cloudflare-challenge");
+  // A hostname in the body is not evidence of a challenge.
+  assert.equal(describeBody('<script src="https://challenges.cloudflare.com.evil.example/x.js">'), "html");
+  assert.equal(describeBody("see https://evil.example/?challenges.cloudflare.com"), "text");
   assert.equal(describeBody('{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}'), "rate_limit_error");
   assert.equal(describeBody('{"error":{"type":"authentication_error"}}'), "authentication_error");
   assert.equal(describeBody('{"error":{"type":"something_new"}}'), "json");

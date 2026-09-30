@@ -22,7 +22,7 @@ The plugin is **zero-dependency CommonJS** on Stream Deck's bundled Node 24: no 
 
 - The plugin reads Claude Code's login from `~/.claude/.credentials.json`. That file holds live OAuth access/refresh tokens and may hold other tools' secrets. **Never print, log, or read it whole.** If you need to inspect it, extract only key names or the one field you need.
 - Never refresh the OAuth token from the plugin. Claude Code owns the refresh token; using it here would rotate it and break Claude Code's login. On expiry, show `EXPIRED` and let Claude Code renew it.
-- `logs/errors.log` records time, status, URL and a fixed label for the kind of reply (`describeBody`: `cloudflare-challenge`, a known Anthropic error type, `json`, `html`, `text`, `empty`). Never write request headers or any text from the response: the body is untrusted (CodeQL `js/http-to-file-access`). To recognise a new failure, add a label, not an excerpt.
+- `logs/errors.log` records time, status, URL and a fixed label for the kind of reply (`describeBody`: `cloudflare-challenge`, a known Anthropic error type, `json`, `html`, `text`, `empty`). Never write request headers or any text from the response: the body is untrusted (CodeQL `js/http-to-file-access`). To recognise a new failure, add a label, not an excerpt. Detect from headers or exact markers (Cloudflare challenges: `cf-mitigated: challenge`, fallback `<title>Just a moment...</title>`); never substring-match hostnames or URLs (CodeQL `js/incomplete-url-substring-sanitization`). If a host ever needs checking, parse it with `new URL()` and compare `hostname` exactly.
 
 ### Don't work around protections
 

@@ -22,10 +22,11 @@ const API_ERRORS = [
   "overloaded_error",
 ];
 
-// The response body is untrusted, so only fixed labels chosen here ever reach the log file.
-function describeBody(body) {
+// The response is untrusted, so only fixed labels chosen here ever reach the log file.
+// Cloudflare marks challenge pages with "cf-mitigated: challenge"; the page title is a fallback.
+function describeBody(body, cfMitigated = null) {
+  if (cfMitigated === "challenge" || body.includes("<title>Just a moment...</title>")) return "cloudflare-challenge";
   if (!body) return "empty";
-  if (body.includes("Just a moment") || body.includes("challenges.cloudflare.com")) return "cloudflare-challenge";
   try {
     const type = JSON.parse(body)?.error?.type;
     return API_ERRORS.find((known) => known === type) ?? "json";
@@ -35,8 +36,8 @@ function describeBody(body) {
 }
 
 // Failed requests go to logs/errors.log (time, status, URL, kind of reply; never headers or reply text).
-function logFailure(url, status, body) {
-  const line = `${new Date().toISOString()} ${status} GET ${url} reply=${describeBody(body)}\n`;
+function logFailure(url, status, reply) {
+  const line = `${new Date().toISOString()} ${status} GET ${url} reply=${reply}\n`;
   let fd;
   try {
     fs.mkdirSync(path.dirname(LOG), { recursive: true });
@@ -59,7 +60,8 @@ function logFailure(url, status, body) {
 async function getJson(url, headers) {
   const res = await fetch(url, { headers: { Accept: "application/json", ...headers }, signal: AbortSignal.timeout(15000) });
   if (!res.ok) {
-    logFailure(url, res.status, await res.text().catch(() => ""));
+    const body = await res.text().catch(() => "");
+    logFailure(url, res.status, describeBody(body, res.headers.get("cf-mitigated")));
     if (res.status === 401 || res.status === 403) throw new UsageError("AUTH", res.status);
     if (res.status === 429) throw new UsageError("RATE", 429);
     throw new UsageError("HTTP", res.status);
