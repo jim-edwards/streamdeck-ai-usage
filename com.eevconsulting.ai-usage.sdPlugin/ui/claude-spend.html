@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="pi.css">
+</head>
+<body>
+  <label for="interval">Refresh</label>
+  <select id="interval" data-setting="interval">
+    <option value="5" selected>Every 5 minutes</option>
+    <option value="15">Every 15 minutes</option>
+    <option value="30">Every 30 minutes</option>
+    <option value="60">Every hour</option>
+  </select>
+  <div class="hint">Spend and limit come from your Claude Code login. The usage endpoint is rate limited, so 5 minutes is the fastest.</div>
+
+  <script src="pi.js"></script>
+</body>
+</html>

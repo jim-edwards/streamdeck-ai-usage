@@ -1,0 +1,26 @@
+{
+  "Name": "AI Usage",
+  "Version": "0.4.0.0",
+  "Author": "James Edwards",
+  "Description": "Spend and limits for AI providers on your Stream Deck.",
+  "UUID": "com.eevconsulting.ai-usage",
+  "Icon": "imgs/icon",
+  "Category": "AI Usage",
+  "CategoryIcon": "imgs/icon",
+  "CodePath": "bin/plugin.js",
+  "Nodejs": { "Version": "20", "Debug": "enabled" },
+  "SDKVersion": 2,
+  "Software": { "MinimumVersion": "6.4" },
+  "OS": [{ "Platform": "windows", "MinimumVersion": "10" }],
+  "Actions": [
+    {
+      "Name": "Claude Spend",
+      "UUID": "com.eevconsulting.ai-usage.claude-spend",
+      "Icon": "imgs/icon",
+      "Tooltip": "Claude Enterprise spend this month vs. your limit. Press to refresh.",
+      "PropertyInspectorPath": "ui/claude-spend.html",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "imgs/key" }]
+    }
+  ]
+}

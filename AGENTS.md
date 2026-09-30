@@ -1,0 +1,118 @@
+# AGENTS.md
+
+Guidance for AI coding agents and contributors working in this repository. User-facing docs are in [README.md](README.md). Licensed GPL-3.0 ([LICENSE](LICENSE)).
+
+## What this is
+
+A Stream Deck plugin (Windows) for AI provider usage. The plugin is deliberately provider-neutral (`com.eevconsulting.ai-usage`, category "AI Usage"); each provider/metric is its own action. Current actions:
+
+- **Claude Spend** (`com.eevconsulting.ai-usage.claude-spend`): month-to-date Claude Enterprise spend vs. the limit, the exact figures Claude Code's `/usage` shows.
+
+## Rules
+
+### Exact data or nothing
+
+Show **exact** numbers only. No estimates, no data reconstructed from polling snapshots, no cost estimated from token counts, even if labelled. If a view can't be backed by an exact source, don't build it (a 30-day trend view was built and removed for this reason). When a value is missing, show an explicit state (`NO DATA`), never a guess or `$0`.
+
+### Zero dependencies
+
+The plugin is **zero-dependency CommonJS** on Stream Deck's bundled Node 20: no npm packages, no TypeScript, no `@elgato/streamdeck`, no build step. Some development environments block `npm install`, and a dependency-free plugin is simpler to audit. `bin/socket.js` is a minimal WebSocket client over `node:net` for that reason. Tests use Node's built-in `node:test`; packaging uses PowerShell and .NET's zip support rather than the Elgato CLI.
+
+### Secrets and credentials
+
+- The plugin reads Claude Code's login from `~/.claude/.credentials.json`. That file holds live OAuth access/refresh tokens and may hold other tools' secrets. **Never print, log, or read it whole.** If you need to inspect it, extract only key names or the one field you need.
+- Never refresh the OAuth token from the plugin. Claude Code owns the refresh token; using it here would rotate it and break Claude Code's login. On expiry, show `EXPIRED` and let Claude Code renew it.
+- `logs/errors.log` records URL, status and response body only, never request headers. Keep it that way.
+
+### Don't work around protections
+
+Don't try to get past Cloudflare or other bot protection (spoofed browser headers, clearance cookies, headless browsers). If an endpoint is only reachable from a browser, it's unavailable to the plugin.
+
+### Verifying against real services
+
+Don't probe the live endpoints ad hoc from a shell. Behaviour is verified by installing the plugin (`install.ps1`) and watching the key; server replies for failures land in `logs/errors.log` inside the installed plugin folder (`%APPDATA%\Elgato\StreamDeck\Plugins\com.eevconsulting.ai-usage.sdPlugin\logs\`).
+
+## Adding an action / provider
+
+- The plugin ID `com.eevconsulting.ai-usage` is the maintainer's domain reversed (Elgato requires reverse-DNS of a domain you control). Don't change it: Stream Deck ties placed keys to the plugin and action UUIDs, so renaming breaks every user's keys.
+- Action UUID: `com.eevconsulting.ai-usage.<provider>-<metric>` (e.g. `...openai-spend`). Action name: `<Provider> <Metric>`. Settings page: `ui/<provider>-<metric>.html`. Add it to `manifest.json`.
+- Provider API code (login, requests) goes in `bin/providers/<provider>.js`. Each action is `bin/actions/<provider>-<metric>.js` exporting `{ uuid, defaultMinutes, minMinutes, load(settings) → Promise<data>, render(data, settings, stale) → svg }`, plus `summarize` for tests. Register it in `ACTIONS` in `bin/plugin.js`, which dispatches on `msg.action`.
+- Throw `UsageError` (`bin/http.js`) with a code (`LOGIN`, `EXPIRED`, `AUTH`, `RATE`, `HTTP`, `NODATA`) so the shared error screens work; add messages in `bin/ui.js` for new codes.
+- Settings pages load `ui/pi.css` and `ui/pi.js`; any element with `data-setting="name"` is saved automatically.
+- Keep the shared look (`frame`, `header`, `text`, `INK`, `money`, `tone`, message screens in `bin/ui.js`) so all keys match.
+- Settings changes redraw from cached data and restart the timer without refetching (`schedule(ctx, false)`), to protect rate-limited endpoints. Only `willAppear` and key presses fetch immediately.
+- Add `test/<provider>-<metric>.test.js` covering `summarize` edge cases and `render` output. The `manifest` suite fails if the manifest and `ACTIONS` disagree.
+
+## Data source: `GET https://api.anthropic.com/api/oauth/usage`
+
+The same request Claude Code's `/usage` screen makes: `https://api.anthropic.com/api/oauth/usage` with the Claude Code OAuth bearer token and the header `anthropic-beta: oauth-2025-04-20`. This is a private, undocumented endpoint and may change without notice.
+
+Auth: `claudeAiOauth.accessToken` (and `claudeAiOauth.expiresAt`, epoch ms) from `~/.claude/.credentials.json`.
+
+The plugin only relies on this part of the response (confirmed live):
+
+```text
+{
+  extra_usage: {
+      is_enabled: boolean,
+      monthly_limit: number|null,   // minor units (cents for USD)
+      used_credits: number|null,    // minor units
+      utilization: number|null,
+      currency: string|null
+  } | null,
+  ...
+}
+```
+
+- `/usage` displays e.g. "Usage credits … 68% used · $412.50 / $600.00 spent · Resets Oct 1 (America/Los_Angeles)". The percentage is floored; the plugin matches.
+- `extra_usage` carries no reset time. The plugin computes the billing month (label and "resets" date) in **America/Los_Angeles**, as `/usage` shows. If the response ever provides a reset time for usage credits, switch to it.
+- `used_credits == null` or no `extra_usage` → `NODATA`.
+- **Rate limited**: never poll faster than every 5 minutes; a 429 shows `BUSY` (or keeps the last data with a red dot).
+
+## Dead ends (don't retry without new information)
+
+- **claude.ai `GET /api/organizations/{org}/usage/spend?start_date&end_date&group_by=product_surface&granularity=daily`**: has exact daily spend by product (visible in browser DevTools on the claude.ai usage page), but every non-browser request gets Cloudflare's "Just a moment…" challenge (HTTP 403 HTML), with or without a bearer token. Unavailable.
+- **Calling the `claude` CLI** (even once a day, cached): `/usage` → Usage credits is the same `/api/oauth/usage` request; `/usage` → Stats is computed from local session files (Claude Code on one machine, cost estimated from tokens), so it isn't exact. `/usage` is interactive-only anyway.
+- **Other Claude Code endpoints**: none of the requests Claude Code makes return usage history.
+- **Recording history from `/api/oauth/usage` snapshots**: exact only at sampled times; daily attribution depends on uptime. Rejected under the exact-data rule.
+
+## Code map
+
+- `com.eevconsulting.ai-usage.sdPlugin/manifest.json`: SDK v2, `Nodejs.Version: "20"`, Keypad actions.
+- `bin/plugin.js`: entry point (`main()` runs only when executed directly; exports `ACTIONS` for tests). Stream Deck events (`willAppear`, `didReceiveSettings`, `keyDown` = refresh now, `willDisappear`); per-key state `{ action, settings, data, error, timer }`; `draw` / `refresh` / `schedule`.
+- `bin/socket.js`: `connectSocket(port, onOpen, onText, onClose)` → `send(obj)`. `plugin.js` exits the process in `onClose`; the socket never exits by itself.
+- `bin/http.js`: `UsageError`, `getJson` (401/403 → AUTH, 429 → RATE, other non-OK → HTTP, 15 s timeout). Failures are appended to `logs/errors.log` (capped at 100 KB).
+- `bin/ui.js`: `FONT`, `INK` colours, `money`, `tone`, `frame`, `text`, `header`, `renderMessage`, `renderLoading`.
+- `bin/providers/claude.js`: `readCredentials`, `fetchCredits`.
+- `bin/actions/claude-spend.js`: `load`, `billingMonth`, `summarize`, `render`. 5 min default and minimum.
+- `ui/pi.js` + `ui/pi.css`: shared settings-panel wiring and style. `ui/claude-spend.html`: `interval` (5/15/30/60).
+- `install.ps1`: developer install. Stops StreamDeck.exe, replaces `%APPDATA%\Elgato\StreamDeck\Plugins\com.eevconsulting.ai-usage.sdPlugin`, restarts it.
+
+## Rendering
+
+- Key image: 144×144 SVG sent as a `data:image/svg+xml` URI via `setImage`. Keys display at about 72 px physical, so anything under ~2 px disappears.
+- Stream Deck renders **SVG Tiny 1.2**: no filters, no letter-spacing.
+- Style: dark, task-manager look. Background gradient `#151b24` → `#0a0d12`, label `#7d8fa8`, value `#f5f7fa`, sub-text `#5c6f88`, bar track `#1c2430`.
+- Accent by % of limit: `< 60%` teal `#2dd4bf`, `< 85%` amber `#fbbf24`, else red `#f43f5e`. The corner dot turns red when the latest fetch failed but older data is still shown.
+- If you chart categories, use a colour-blind-safe categorical palette in a fixed order and validate it (CVD separation and contrast) against the key background (`#11161d`). Text stays in `INK` colours, never series colours.
+
+## Testing
+
+- **Run `node --test` after every change.** Node's built-in runner; each `test/*.test.js` runs in its own process. No test framework dependencies.
+- Suites: `ui`, `http` (mocks `global.fetch`; removes the `logs/` dir it creates), `claude-spend` (points `HOME`/`USERPROFILE` at a temp dir before requiring, so credentials are fake), `socket`, `manifest` (manifest ↔ `ACTIONS` ↔ files), `plugin` (spawns `bin/plugin.js` against `test/helpers/fake-stream-deck.js` with an empty temp home, so nothing reaches the network).
+- Tests must never use the real `~/.claude` or the network.
+- Reference figures (made up; don't put real account data in the repo): `{ extra_usage: { monthly_limit: 60000, used_credits: 41250 } }` on 2026-09-29 → `{ total: 412.5, limit: 600, month: "SEP", resets: "Oct 1" }`; `2026-10-01T05:00Z` is still SEP (LA time), `08:00Z` is OCT / "Nov 1".
+- **Look at visual changes**: write `render(...)` SVGs into an HTML page (`<img>` at 288 px) in a temp folder, screenshot it with a headless browser (e.g. `msedge --headless=new --disable-gpu --hide-scrollbars --window-size=1580,340 --screenshot=<png> file:///<html>`), and inspect the PNG before calling the change done.
+
+## Build and release
+
+- `scripts/pack.ps1 -Version 1.2.3` (PowerShell 7) stages the `.sdPlugin` folder, drops `logs/`, adds `LICENSE`, sets manifest `Version` to `1.2.3.0` and `Nodejs.Debug` to `disabled` (the source manifest keeps it `enabled` for development), and zips it into `dist/com.eevconsulting.ai-usage-1.2.3.streamDeckPlugin` (folder at the zip root, `/` separators).
+- `.github/workflows/ci.yml`: push to `main` / PRs → `node --test` on windows-latest + ubuntu-latest (Node 20), then package and upload as an artifact. `permissions: contents: read`.
+- `.github/workflows/release.yml`: tag `v*.*.*` → tests (Windows) → package with the tag version → `gh release create --generate-notes --verify-tag`. Only the release job has `contents: write`. The tag reaches scripts through `env:`, never `${{ }}` inside `run:` (avoids script injection).
+- Only first-party GitHub actions (`actions/checkout`, `actions/setup-node`, `actions/upload-artifact`) plus the preinstalled `gh` CLI. Pin any new action to a commit SHA.
+- The source manifest `Version` is a dev placeholder; releases take their version from the tag.
+
+## Open items
+
+1. Check whether the SVG manifest icons show up in the Stream Deck action list; convert to PNG if blank.
+2. Look for a server-provided reset time for usage credits to replace the America/Los_Angeles assumption.

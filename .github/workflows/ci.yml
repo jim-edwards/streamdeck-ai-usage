@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the platform the plugin ships for; Linux catches path/timezone assumptions.
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 20 is the runtime Stream Deck bundles (manifest Nodejs.Version).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Unit tests
+        run: node --test
+
+  package:
+    name: Package
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build .streamDeckPlugin
+        shell: pwsh
+        run: ./scripts/pack.ps1 -Version 0.0.0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: streamDeckPlugin
+          path: dist/*.streamDeckPlugin
+          if-no-files-found: error
+          retention-days: 14
