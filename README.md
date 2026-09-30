@@ -105,6 +105,7 @@ The version defaults to `package.json`'s. `-Build <n>` sets the manifest's fourt
 ### CI and releases (GitHub Actions)
 
 - **CI** (`.github/workflows/ci.yml`): on every push to `main` and every pull request, runs the tests on Windows and Linux with Node 24 (the runtime Stream Deck uses for the plugin), then builds the package and attaches it to the run. The download is the `.streamDeckPlugin` itself (not zipped), named like `com.eevconsulting.ai-usage-0.4.0-ci.12-797ff73.streamDeckPlugin` (version, CI run number, commit), with manifest version `0.4.0.12`.
+- **CodeQL** (`.github/workflows/codeql.yml`): code scanning of the JavaScript and of the workflow files on every pull request, every push to `main`, and weekly. `main` only accepts changes through pull requests that have code scanning results.
 - **Dependabot** (`.github/dependabot.yml`): the workflows pin each action to an exact commit; Dependabot opens a weekly pull request when a new version is out.
 - **Release** (`.github/workflows/release.yml`): pushing a version tag runs the tests, builds the package with that version, and publishes a GitHub Release with the `.streamDeckPlugin` attached and generated release notes.
 

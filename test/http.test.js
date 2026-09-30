@@ -61,6 +61,16 @@ test("logs failures with URL, status and body, but never request headers", async
   assert.doesNotMatch(log, /SECRET-TOKEN/);
 });
 
+test("the error log is reset once it passes 100 KB", async () => {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+  fs.writeFileSync(LOG, "x".repeat(100_001));
+  mockFetch(500, "after-reset", "text/plain");
+  await assert.rejects(getJson("https://example.test/big", {}));
+  const log = fs.readFileSync(LOG, "utf8");
+  assert.ok(log.length < 1000, `log was ${log.length} bytes`);
+  assert.match(log, /500 GET https:\/\/example\.test\/big/);
+});
+
 test("network errors propagate unchanged", async () => {
   global.fetch = async () => {
     throw new TypeError("fetch failed");

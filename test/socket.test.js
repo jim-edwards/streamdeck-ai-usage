@@ -1,6 +1,5 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { once } = require("node:events");
 const { startFakeStreamDeck, encodeFrame } = require("./helpers/fake-stream-deck");
 const { connectSocket } = require("../com.eevconsulting.ai-usage.sdPlugin/bin/socket");
 
