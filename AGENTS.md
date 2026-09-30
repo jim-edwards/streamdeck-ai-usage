@@ -37,6 +37,8 @@ Don't probe the live endpoints ad hoc from a shell. Behaviour is verified by ins
 - The plugin ID `com.eevconsulting.ai-usage` is the maintainer's domain reversed (Elgato requires reverse-DNS of a domain you control). Don't change it: Stream Deck ties placed keys to the plugin and action UUIDs, so renaming breaks every user's keys.
 - Action UUID: `com.eevconsulting.ai-usage.<provider>-<metric>` (e.g. `...openai-spend`). Action name: `<Provider> <Metric>`. Settings page: `ui/<provider>-<metric>.html`. Add it to `manifest.json`.
 - Provider API code (login, requests) goes in `bin/providers/<provider>.js`. Each action is `bin/actions/<provider>-<metric>.js` exporting `{ uuid, defaultMinutes, minMinutes, load(settings) → Promise<data>, render(data, settings, stale) → svg }`, plus `summarize` for tests. Register it in `ACTIONS` in `bin/plugin.js`, which dispatches on `msg.action`.
+- Failures of a user-initiated action (key press) must send `showAlert` (Marketplace requirement); `refresh(ctx, { pressed: true })` does this. Timer refreshes don't alert; they show the error screen or the red dot.
+- Follow Elgato's [plugin guidelines](https://docs.elgato.com/guidelines/stream-deck/plugins/): action-list and category icons monochrome white (`#FFFFFF`) on transparent; settings pages save on change, use selects/checkboxes, no Save button, no donation links or copyright text.
 - Throw `UsageError` (`bin/http.js`) with a code (`LOGIN`, `EXPIRED`, `AUTH`, `RATE`, `HTTP`, `NODATA`) so the shared error screens work; add messages in `bin/ui.js` for new codes.
 - Settings pages load `ui/pi.css` and `ui/pi.js`; any element with `data-setting="name"` is saved automatically.
 - Keep the shared look (`frame`, `header`, `text`, `INK`, `money`, `tone`, message screens in `bin/ui.js`) so all keys match.
@@ -115,6 +117,12 @@ The plugin only relies on this part of the response (confirmed live):
 - Versions: `package.json` `version` = first three parts of manifest `Version` = the upcoming release (the `manifest` suite enforces the match). Releases take their version from the tag.
 - CI and release test with the same Node major as the manifest's `Nodejs.Version`; change them together.
 - Reference: Elgato's [manifest](https://docs.elgato.com/streamdeck/sdk/references/manifest/) and [plugin environment](https://docs.elgato.com/streamdeck/sdk/introduction/plugin-environment/) docs (bundled Node versions per Stream Deck release; 7.1+ bundles 20.20.0 and 24.13.1).
+
+## Marketplace
+
+- Listing text (name, description, links, release notes) lives in `marketplace/listing.md`; add release notes there for each version submitted.
+- `pwsh -File marketplace/build.ps1` renders the thumbnail and three gallery images (1920×960 PNG) to `dist/marketplace/` from `marketplace/pages.js`, which uses the plugin's real `render()` output. Rebuild and look at them after any visual change to the key. Use made-up figures only, and never third-party logos.
+- Elgato validates plugins with its Stream Deck CLI (`streamdeck validate`), an npm package; this repo doesn't install it (zero dependencies), so run it separately before submitting if you can.
 
 ## Open items
 

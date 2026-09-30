@@ -33,7 +33,7 @@ function main() {
           schedule(ctx, !k.data);
           break;
         case "keyDown":
-          if (k) refresh(ctx);
+          if (k) refresh(ctx, { pressed: true });
           break;
         case "willDisappear":
           clearInterval(k?.timer);
@@ -57,7 +57,7 @@ function main() {
     setImage(ctx, k.data ? k.action.render(k.data, k.settings, !!k.error) : renderMessage(k.error));
   }
 
-  async function refresh(ctx) {
+  async function refresh(ctx, { pressed = false } = {}) {
     const k = keys.get(ctx);
     if (!k) return;
     try {
@@ -66,7 +66,10 @@ function main() {
     } catch (e) {
       k.error = e;
     }
-    if (keys.has(ctx)) draw(ctx);
+    if (!keys.has(ctx)) return;
+    draw(ctx);
+    // Marketplace guideline: a press that fails must show Stream Deck's alert, not just a new image.
+    if (pressed && k.error) send({ event: "showAlert", context: ctx });
   }
 
   function schedule(ctx, fetchNow) {

@@ -1,8 +1,9 @@
 {
   "Name": "AI Usage",
-  "Version": "0.4.0.0",
+  "Version": "0.1.1.0",
   "Author": "James Edwards",
   "Description": "Spend and limits for AI providers on your Stream Deck.",
+  "URL": "https://github.com/jim-edwards/streamdeck-ai-usage",
   "UUID": "com.eevconsulting.ai-usage",
   "Icon": "imgs/plugin",
   "Category": "AI Usage",

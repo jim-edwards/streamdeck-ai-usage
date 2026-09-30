@@ -45,7 +45,7 @@ The script closes Stream Deck, copies `com.eevconsulting.ai-usage.sdPlugin` into
 
 1. Drag **AI Usage → Claude Spend** onto a key.
 2. That's it. Optionally click the key to change **Refresh**: every 5 (default), 15, 30 or 60 minutes. The usage endpoint is rate limited, so 5 minutes is the fastest.
-3. Press the key to refresh right away.
+3. Press the key to refresh right away. If that refresh fails, the key briefly shows Stream Deck's warning triangle.
 
 ## What the key can show
 
@@ -101,6 +101,10 @@ pwsh -File scripts/pack.ps1 -Version 1.2.3   # dist/com.eevconsulting.ai-usage-1
 ```
 
 The version defaults to `package.json`'s. `-Build <n>` sets the manifest's fourth version part, and `-Suffix` tags the file name for non-release builds. Packages always ship with the Node debugger disabled and include `LICENSE`.
+
+### Marketplace listing
+
+`marketplace/listing.md` has the listing text (name, description, links, release notes). `pwsh -File marketplace/build.ps1` renders the thumbnail and gallery images (1920×960 PNG) into `dist/marketplace/` using the plugin's own key rendering; it needs Microsoft Edge.
 
 ### CI and releases (GitHub Actions)
 
