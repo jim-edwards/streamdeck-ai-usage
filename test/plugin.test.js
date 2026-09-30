@@ -56,6 +56,19 @@ test("pressing the key refreshes it", async (t) => {
   assert.ok(svgFrom(imagesFor(deck, "key-1").at(-1)).includes("NO LOGIN"));
 });
 
+test("a failed key press shows Stream Deck's alert; automatic refreshes don't", async (t) => {
+  const { deck } = await launch(t);
+  const alerts = () => deck.messages().filter((m) => m.event === "showAlert");
+  deck.send({ event: "willAppear", action: SPEND, context: "key-1", payload: { settings: {} } });
+  await deck.waitForMessage((m) => m.event === "setImage" && svgFrom(m).includes("NO LOGIN"));
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(alerts().length, 0, "no alert for the automatic refresh");
+
+  deck.send({ event: "keyDown", action: SPEND, context: "key-1", payload: {} });
+  const alert = await deck.waitForMessage((m) => m.event === "showAlert");
+  assert.deepEqual(alert, { event: "showAlert", context: "key-1" });
+});
+
 test("unknown actions and removed keys are ignored", async (t) => {
   const { deck } = await launch(t);
   deck.send({ event: "willAppear", action: "com.example.other", context: "stranger", payload: { settings: {} } });

@@ -36,10 +36,11 @@ test("plugin icon is PNG at 256x256 and @2x 512x512 (SVG isn't allowed for it)",
   assert.ok(!fs.existsSync(path.join(root, `${manifest.Icon}.svg`)), "no SVG plugin icon to shadow the PNG");
 });
 
-test("package.json version matches the manifest's first three version parts", () => {
+test("versions come only from git tags: nothing in the source carries one", () => {
+  // scripts/pack.ps1 stamps the real version into the packaged manifest from the tag.
+  assert.equal(manifest.Version, "0.0.0.0");
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
-  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
-  assert.equal(manifest.Version.split(".").slice(0, 3).join("."), pkg.version);
+  assert.equal(pkg.version, undefined, "package.json must not have a version");
 });
 
 test("code path and images exist", () => {
