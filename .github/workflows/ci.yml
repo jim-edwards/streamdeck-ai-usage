@@ -53,7 +53,7 @@ jobs:
         run: ./scripts/pack.ps1 -Build $env:RUN_NUMBER -Suffix "ci.$env:RUN_NUMBER-$($env:SHA.Substring(0, 7))"
 
       # archive: false uploads the .streamDeckPlugin itself (named after the file), not a zip around it.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           path: dist/*.streamDeckPlugin
           archive: false
