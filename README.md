@@ -58,9 +58,9 @@ The script closes Stream Deck, copies `com.eevconsulting.ai-usage.sdPlugin` into
 | `NO DATA` | Your plan doesn't report usage credits | Nothing to show for this account |
 | `BUSY` | Rate limited | Wait; it retries on the next refresh |
 | `HTTP 5xx` | Server error | Press to retry |
-| `OFFLINE` | Network error or timeout | Press to retry |
+| `OFFLINE` | Network error or timeout | Press to retry; `logs\errors.log` has the error code |
 
-Failed requests are written to `logs\errors.log` inside the installed plugin folder: time, status, URL and the kind of reply (for example `cloudflare-challenge` or `rate_limit_error`). Your token and the reply's text are never written.
+Failed requests are written to `logs\errors.log` inside the installed plugin folder: time, status, URL and the kind of reply (for example `cloudflare-challenge` or `rate_limit_error`), or, when there was no reply, Node's error code (for example `ENOTFOUND` or `timeout`). Your token and the reply's text are never written.
 
 ## How it works
 

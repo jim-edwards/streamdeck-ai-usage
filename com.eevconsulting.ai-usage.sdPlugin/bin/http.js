@@ -1,5 +1,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const tls = require("node:tls");
+
+// Networks that inspect TLS (e.g. CrowdStrike Falcon) re-sign HTTPS with a root only the OS store trusts.
+// Trust it as well as Node's bundled roots, as `node --use-system-ca` would; Stream Deck can't pass that flag.
+tls.setDefaultCACertificates([...tls.getCACertificates("default"), ...tls.getCACertificates("system")]);
 
 const LOG = path.join(__dirname, "..", "logs", "errors.log");
 
@@ -35,9 +40,16 @@ function describeBody(body, cfMitigated = null) {
   }
 }
 
-// Failed requests go to logs/errors.log (time, status, URL, kind of reply; never headers or reply text).
-function logFailure(url, status, reply) {
-  const line = `${new Date().toISOString()} ${status} GET ${url} reply=${reply}\n`;
+// Requests that fail without a reply are labelled by Node's error code (e.g. UNABLE_TO_VERIFY_LEAF_SIGNATURE), never its message.
+function describeError(e) {
+  if (e?.name === "TimeoutError") return "timeout";
+  const code = e?.cause?.code ?? e?.code;
+  return typeof code === "string" && /^[A-Z0-9_]+$/.test(code) ? code : "network";
+}
+
+// Failed requests go to logs/errors.log (time, status, URL, kind of reply or error; never headers or reply text).
+function logFailure(url, status, detail) {
+  const line = `${new Date().toISOString()} ${status} GET ${url} ${detail}\n`;
   let fd;
   try {
     fs.mkdirSync(path.dirname(LOG), { recursive: true });
@@ -58,10 +70,16 @@ function logFailure(url, status, reply) {
 }
 
 async function getJson(url, headers) {
-  const res = await fetch(url, { headers: { Accept: "application/json", ...headers }, signal: AbortSignal.timeout(15000) });
+  let res;
+  try {
+    res = await fetch(url, { headers: { Accept: "application/json", ...headers }, signal: AbortSignal.timeout(15000) });
+  } catch (e) {
+    logFailure(url, "ERR", `error=${describeError(e)}`);
+    throw e;
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    logFailure(url, res.status, describeBody(body, res.headers.get("cf-mitigated")));
+    logFailure(url, res.status, `reply=${describeBody(body, res.headers.get("cf-mitigated"))}`);
     if (res.status === 401 || res.status === 403) throw new UsageError("AUTH", res.status);
     if (res.status === 429) throw new UsageError("RATE", 429);
     throw new UsageError("HTTP", res.status);
@@ -69,4 +87,4 @@ async function getJson(url, headers) {
   return res.json();
 }
 
-module.exports = { UsageError, getJson, describeBody };
+module.exports = { UsageError, getJson, describeBody, describeError };
