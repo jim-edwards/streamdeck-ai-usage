@@ -2,7 +2,9 @@ const { test, afterEach, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { getJson, UsageError, describeBody } = require("../com.eevconsulting.ai-usage.sdPlugin/bin/http");
+const tls = require("node:tls");
+const { X509Certificate } = require("node:crypto");
+const { getJson, UsageError, describeBody, describeError } = require("../com.eevconsulting.ai-usage.sdPlugin/bin/http");
 
 const LOG_DIR = path.join(__dirname, "..", "com.eevconsulting.ai-usage.sdPlugin", "logs");
 const LOG = path.join(LOG_DIR, "errors.log");
@@ -103,9 +105,25 @@ test("the error log is reset once it passes 100 KB", async () => {
   assert.match(log, /500 GET https:\/\/example\.test\/big/);
 });
 
-test("network errors propagate unchanged", async () => {
+test("network errors propagate unchanged and are logged by error code", async () => {
   global.fetch = async () => {
-    throw new TypeError("fetch failed");
+    throw new TypeError("fetch failed", { cause: Object.assign(new Error("unable to verify"), { code: "UNABLE_TO_VERIFY_LEAF_SIGNATURE" }) });
   };
   await assert.rejects(getJson("https://example.test/down", {}), TypeError);
+  assert.match(fs.readFileSync(LOG, "utf8"), /ERR GET https:\/\/example\.test\/down error=UNABLE_TO_VERIFY_LEAF_SIGNATURE\n$/);
+});
+
+test("describeError only returns error codes or fixed labels", () => {
+  assert.equal(describeError(new TypeError("fetch failed", { cause: { code: "ENOTFOUND" } })), "ENOTFOUND");
+  assert.equal(describeError(new DOMException("timed out", "TimeoutError")), "timeout");
+  assert.equal(describeError(new TypeError("fetch failed", { cause: { code: "evil\n2026 200 GET forged" } })), "network");
+  assert.equal(describeError(new TypeError("fetch failed")), "network");
+  assert.equal(describeError(undefined), "network");
+});
+
+test("TLS trusts the OS certificate store as well as Node's bundled roots", () => {
+  // Compare fingerprints: Node re-serializes the PEM text of the certificates it is given.
+  const fingerprints = (type) => tls.getCACertificates(type).map((pem) => new X509Certificate(pem).fingerprint256);
+  const trusted = new Set(fingerprints("default"));
+  for (const fp of [...fingerprints("bundled"), ...fingerprints("system")]) assert.ok(trusted.has(fp), fp);
 });
